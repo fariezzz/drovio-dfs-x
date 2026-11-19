@@ -98,6 +98,12 @@ def main() -> int:
         f" {sebelum['kesehatan_replikasi']['chunk_di_bawah_faktor']}"
     )
 
+    # Nama container berawalan dfsx-, sedangkan node_id di master tanpa awalan.
+    node_target = argumen.node.replace("dfsx-", "")
+    mati_sebelum = {n["node_id"] for n in sebelum["node"] if n["status"] != "hidup"}
+    # Angka self-healing di master bersifat kumulatif, jadi dicatat dulu.
+    pulih_sebelum = int(sebelum["self_healing"]["chunk_dipulihkan"])
+
     print(f"\n[2/6] Mematikan {argumen.node}")
     t0 = time.perf_counter()
     kode, keluaran = docker("stop", argumen.node)
@@ -129,18 +135,24 @@ def main() -> int:
 
     print("\n[4/6] Menunggu master menandai node mati")
     waktu_deteksi = None
-    node_mati: list[str] = []
+    terdeteksi = False
     while time.perf_counter() - t0 < argumen.batas_pemulihan:
         st = klien.status()
-        node_mati = [n["node_id"] for n in st["node"] if n["status"] != "hidup"]
-        if node_mati:
+        mati_kini = {n["node_id"] for n in st["node"] if n["status"] != "hidup"}
+        # Hanya node target yang dihitung. Node yang sudah mati sebelum uji
+        # dimulai tidak boleh dilaporkan sebagai hasil deteksi.
+        if node_target in mati_kini - mati_sebelum:
             waktu_deteksi = round(time.perf_counter() - t0, 2)
+            terdeteksi = True
             break
         time.sleep(0.5)
     print(
-        f"  Node terdeteksi mati: {node_mati or 'belum terdeteksi'}"
+        f"  Node target {node_target} terdeteksi mati:"
+        f" {'ya' if terdeteksi else 'belum'}"
         f" setelah {waktu_deteksi} detik sejak perintah stop"
     )
+    if mati_sebelum:
+        print(f"  Node yang sudah mati sebelum uji, diabaikan: {sorted(mati_sebelum)}")
 
     print("\n[5/6] Menunggu self-healing memulihkan faktor replikasi")
     waktu_pulih = None
@@ -157,9 +169,11 @@ def main() -> int:
 
     st_pulih = klien.status()
     sh = st_pulih["self_healing"]
+    # Selisih terhadap angka awal, karena hitungan master kumulatif.
+    dipulihkan = int(sh["chunk_dipulihkan"]) - pulih_sebelum
     print(
         f"  Chunk kehilangan salinan: {kurang_awal or 0},"
-        f" dipulihkan {sh['chunk_dipulihkan']}, gagal {sh['chunk_gagal']}"
+        f" dipulihkan {dipulihkan}, gagal {sh['chunk_gagal']}"
     )
     print(f"  Faktor replikasi pulih penuh pada {waktu_pulih} detik sejak perintah stop")
     print(
@@ -208,9 +222,11 @@ def main() -> int:
             "waktu_perintah_stop_detik": waktu_stop,
             "waktu_deteksi_node_mati_detik": waktu_deteksi,
             "ambang_node_mati_detik": klien.konfigurasi["node_dead_threshold_seconds"],
-            "node_terdeteksi_mati": node_mati,
+            "node_target": node_target,
+            "node_target_terdeteksi_mati": terdeteksi,
+            "node_mati_sebelum_uji": sorted(mati_sebelum),
             "chunk_kehilangan_salinan": kurang_awal or 0,
-            "chunk_dipulihkan": sh["chunk_dipulihkan"],
+            "chunk_dipulihkan": dipulihkan,
             "chunk_gagal_dipulihkan": sh["chunk_gagal"],
             "waktu_pemulihan_penuh_detik": waktu_pulih,
             "siklus_self_healing": sh["siklus"],
@@ -229,10 +245,11 @@ def main() -> int:
     print(f"HASIL DISIMPAN: {path}")
     print("=" * 72)
 
-    # Syarat lulus: baca tetap berhasil saat node mati, hash cocok, dan
-    # replikasi kembali lengkap.
+    # Syarat lulus: node target benar terdeteksi mati, baca tetap berhasil
+    # dengan hash cocok, dan replikasi kembali lengkap.
     lulus = (
-        saat_mati.berkas_gagal == 0
+        terdeteksi
+        and saat_mati.berkas_gagal == 0
         and saat_mati.hash_cocok == saat_mati.jumlah_berkas
         and st_pulih["kesehatan_replikasi"]["chunk_di_bawah_faktor"] == 0
     )

@@ -65,10 +65,13 @@ def atur_jumlah_node(target: int, master_url: str, batas_tunggu: float = 180.0) 
     # Hentikan node di luar jangkauan target, dan hidupkan yang di dalamnya.
     for i in range(1, 17):
         nama = f"dfsx-datanode-{i}"
-        if i <= target:
-            subprocess.run([DOCKER_BIN, "start", nama], capture_output=True, text=True)
-        else:
-            subprocess.run([DOCKER_BIN, "stop", nama], capture_output=True, text=True)
+        try:
+            if i <= target:
+                subprocess.run([DOCKER_BIN, "start", nama], capture_output=True, text=True, timeout=120)
+            else:
+                subprocess.run([DOCKER_BIN, "stop", nama], capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            print(f"  Peringatan: docker {nama} melewati 120 detik, dilewati")
 
     # Node mati perlu waktu melewati ambang heartbeat sebelum master
     # menandainya, jadi tunggu sampai hitungan node hidup benar-benar pas.
@@ -137,6 +140,12 @@ def main() -> int:
         default=3,
         help="jumlah node yang dihidupkan kembali setelah pengujian",
     )
+    parser.add_argument(
+        "--pemanasan",
+        type=int,
+        default=5,
+        help="jumlah berkas pemanasan per konfigurasi, hasilnya dibuang",
+    )
     argumen = parser.parse_args()
 
     daftar_node = [int(x) for x in argumen.node_list.split(",") if x.strip()]
@@ -164,6 +173,15 @@ def main() -> int:
             )
         klien = KlienDfsx(master_url=master_url, mode=argumen.mode)
         print(f"  Node hidup menurut master: {hidup}, mode klien {klien.mode}")
+
+        # Pemanasan wajib sebelum pengukuran apa pun. Container yang baru
+        # naik punya cache dingin, dan tanpa pemanasan angka pertama bisa
+        # 3 sampai 4 kali lebih lambat sehingga speedup jadi menyesatkan.
+        klien.reset()
+        pemanasan = berkas[: min(len(berkas), argumen.pemanasan)]
+        if pemanasan:
+            jalankan_tahap(klien, pemanasan, argumen.paralel, "pemanasan")
+            print(f"  Pemanasan {len(pemanasan)} berkas selesai, hasilnya dibuang")
 
         # Waktu sekuensial diukur sekali pada konfigurasi pertama, lalu
         # dipakai sebagai pembanding tetap untuk semua konfigurasi.
@@ -199,6 +217,23 @@ def main() -> int:
         )
         st = klien.status()
 
+        # Speedup tidak boleh melampaui paralelisme klien. Bila terlampaui,
+        # pembanding sekuensialnya yang cacat, bukan sistemnya yang cepat.
+        batas_wajar = argumen.paralel * 1.15
+        catatan: list[str] = []
+        if s_up > batas_wajar:
+            catatan.append(
+                f"speedup upload {s_up} melampaui paralelisme {argumen.paralel},"
+                " pembanding sekuensial diduga tidak sahih"
+            )
+        if s_down > batas_wajar:
+            catatan.append(
+                f"speedup download {s_down} melampaui paralelisme {argumen.paralel},"
+                " pembanding sekuensial diduga tidak sahih"
+            )
+        for c in catatan:
+            print(f"  PERINGATAN: {c}")
+
         baris = {
             "jumlah_node_diminta": target,
             "jumlah_node_hidup": hidup,
@@ -223,6 +258,9 @@ def main() -> int:
             "efisiensi_download": round(s_down / hidup, 4) if hidup else 0.0,
             "chunk_unik": st["statistik"]["jumlah_chunk_unik"],
             "chunk_di_bawah_faktor": st["kesehatan_replikasi"]["chunk_di_bawah_faktor"],
+            "berkas_pemanasan": len(pemanasan),
+            "hasil_sahih": not catatan,
+            "peringatan": "; ".join(catatan),
         }
         hasil_per_konfigurasi.append(baris)
         print(
