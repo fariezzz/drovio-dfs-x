@@ -41,6 +41,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 drovio.md
+prd-dfs-x-drovio.md
 *.tmp
 *.temp
 
