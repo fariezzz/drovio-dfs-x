@@ -40,8 +40,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-drovio.md
-prd-dfs-x-drovio.md
 *.tmp
 *.temp
 
@@ -58,3 +56,18 @@ Thumbs.db
 *.sw?
 PANDUAN_SETUP.md
 .cloudflared-token
+*.md
+!README.md
+!dfs-x/README.md
+
+# DFS-X: cache Python, konfigurasi lokal, dan hasil pengujian
+__pycache__/
+*.py[cod]
+/dfs-x/config/.env
+/dfs-x/tests/results/
+/dfs-x/tests/dummy/
+
+# Berkas dummy pengujian dan catatan pemetaan hasil Drovio ke DFS-X.
+# Keduanya dibuat saat runtime dan berukuran besar, jadi tidak dicommit.
+/state/*.json
+dfsx-dummy/

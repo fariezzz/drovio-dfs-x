@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getConversionResult } from '@/lib/converter/service';
+import { ambilDariDfsx } from '@/lib/dfsx/client';
+import { ambilCatatanDfsx } from '@/lib/dfsx/registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +16,35 @@ interface RouteContext {
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   const { id } = params;
   const result = getConversionResult(id);
+
+  // Sumber utama DFS-X, berkas lokal hanya cadangan.
+  const catatan = ambilCatatanDfsx(id);
+  if (catatan) {
+    try {
+      const { isi, versi } = await ambilDariDfsx(catatan.fileId);
+      const filename = catatan.nama;
+      const safeAscii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+      return new Response(new Uint8Array(isi), {
+        status: 200,
+        headers: {
+          'Content-Type': catatan.mimeType || 'application/octet-stream',
+          'Content-Length': isi.length.toString(),
+          'Content-Disposition': `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Sumber-Berkas': 'dfs-x',
+          'X-DFSX-Versi': String(versi || catatan.versi),
+        },
+      });
+    } catch (err) {
+      const error = err as Error;
+      if (!result?.filePath || !fs.existsSync(result.filePath)) {
+        return NextResponse.json(
+          { success: false, error: `Berkas tidak dapat diambil dari DFS-X: ${error.message}` },
+          { status: 503 }
+        );
+      }
+    }
+  }
 
   if (!result || !result.filePath || !fs.existsSync(result.filePath)) {
     return NextResponse.json(

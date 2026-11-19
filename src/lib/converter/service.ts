@@ -8,6 +8,7 @@ import { compressPdf } from '../compressor/pdf';
 import { sanitizeWindowsFilename, isPathInside } from '../security';
 import { formatBytes } from '../media-service';
 import { ConversionCategory, ConversionOptions, ConversionResult } from './types';
+import { arsipkanKeDfsx } from '../dfsx/archive';
 
 // Singleton di globalThis agar state bertahan antar request dan antar bundle Next.js
 declare global {
@@ -317,6 +318,16 @@ export async function executeConversion(
 
   const map = getConvertedMap();
   map.set(id, result);
+
+  // Integrasi DFS-X, sama seperti hasil unduhan dan kompresi.
+  await arsipkanKeDfsx({
+    localId: id,
+    sumber: 'convert',
+    filePath: finalPath,
+    namaBerkas: userFacingFilename,
+    mimeType: finalMime,
+  });
+
   return result;
 }
 

@@ -9,6 +9,8 @@ import {
   setPrivateSessionCookie,
 } from '@/lib/private-history';
 import { canAccessPrivateJob } from '@/lib/job-access';
+import { ambilDariDfsx } from '@/lib/dfsx/client';
+import { ambilCatatanDfsx } from '@/lib/dfsx/registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +18,20 @@ interface RouteContext {
   params: {
     id: string;
   };
+}
+
+function tentukanTipeKonten(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === '.mp4') return 'video/mp4';
+  if (ext === '.mp3') return 'audio/mpeg';
+  if (ext === '.webm') return 'video/webm';
+  if (ext === '.m4a') return 'audio/mp4';
+  if (ext === '.srt') return 'application/x-subrip';
+  if (ext === '.vtt') return 'text/vtt';
+  if (['.ass', '.ssa', '.sbv', '.lrc', '.sub'].includes(ext)) {
+    return 'text/plain; charset=utf-8';
+  }
+  return 'application/octet-stream';
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
@@ -38,6 +54,46 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const isSubtitle = req.nextUrl.searchParams.get('kind') === 'subtitle';
   const filepath = isSubtitle ? job.subtitleFilepath : job.outputFilepath;
   const storedFilename = isSubtitle ? job.subtitleFilename : job.outputFilename;
+
+  // Sumber utama berkas media adalah DFS-X, berkas lokal hanya cadangan.
+  // Subtitle tetap dari disk lokal karena belum diarsipkan ke DFS-X.
+  if (!isSubtitle && job.status === 'completed') {
+    const catatan = ambilCatatanDfsx(job.id);
+    if (catatan) {
+      const versiDiminta = req.nextUrl.searchParams.get('versi');
+      try {
+        const { isi, versi } = await ambilDariDfsx(
+          catatan.fileId,
+          versiDiminta ? Number(versiDiminta) : undefined
+        );
+        const filename = catatan.nama || storedFilename || 'berkas';
+        const safeAscii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+        const response = new NextResponse(new Uint8Array(isi), {
+          status: 200,
+          headers: {
+            'Content-Type': tentukanTipeKonten(filename),
+            'Content-Length': isi.length.toString(),
+            'Content-Disposition': `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'X-Sumber-Berkas': 'dfs-x',
+            'X-DFSX-Versi': String(versi || catatan.versi),
+          },
+        });
+        if (isNew) setPrivateSessionCookie(response, sessionId, req.nextUrl.protocol === 'https:');
+        return response;
+      } catch (err) {
+        const error = err as Error;
+        // Bila berkas lokal sudah dibersihkan, tidak ada cadangan lagi:
+        // galat DFS-X yang sebenarnya ditampilkan apa adanya.
+        if (!filepath || !fs.existsSync(filepath)) {
+          return NextResponse.json(
+            { success: false, error: `Berkas tidak dapat diambil dari DFS-X: ${error.message}` },
+            { status: 503 }
+          );
+        }
+      }
+    }
+  }
 
   if (job.status !== 'completed' || !filepath) {
     return NextResponse.json(
@@ -63,16 +119,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   try {
     const stats = fs.statSync(filepath);
     const filename = storedFilename || path.basename(filepath);
-    const ext = path.extname(filename).toLowerCase();
-
-    let contentType = 'application/octet-stream';
-    if (ext === '.mp4') contentType = 'video/mp4';
-    else if (ext === '.mp3') contentType = 'audio/mpeg';
-    else if (ext === '.webm') contentType = 'video/webm';
-    else if (ext === '.m4a') contentType = 'audio/mp4';
-    else if (ext === '.srt') contentType = 'application/x-subrip';
-    else if (ext === '.vtt') contentType = 'text/vtt';
-    else if (ext === '.ass' || ext === '.ssa' || ext === '.sbv' || ext === '.lrc' || ext === '.sub') contentType = 'text/plain; charset=utf-8';
+    const contentType = tentukanTipeKonten(filename);
 
     const nodeStream = fs.createReadStream(filepath);
     const webStream = new ReadableStream({

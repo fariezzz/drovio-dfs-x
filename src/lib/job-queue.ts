@@ -8,6 +8,8 @@ import { Job, JobStatus, DownloadRequest, PlatformType } from './types';
 import { deletePreviewMedia } from './preview-service';
 import { getYoutubeCookiesArgs } from './youtube-cookies';
 import { getPotArgs } from './pot-provider';
+import { arsipkanKeDfsx } from './dfsx/archive';
+import { getDfsxConfig } from './dfsx/client';
 
 // Map pekerjaan aktif dalam memori
 interface JobRuntime {
@@ -33,6 +35,41 @@ class JobManager {
       if (runtime.job.status === 'completed' && runtime.job.outputFilepath) {
         runtime.job.fileExists = fs.existsSync(runtime.job.outputFilepath);
       }
+    }
+  }
+
+  // Kegagalan DFS-X tidak menggagalkan job, tapi dicatat terbuka di
+  // job.dfsx agar pengguna tahu keadaan sebenarnya.
+  private async simpanHasilKeDfsx(job: Job, filePath: string): Promise<void> {
+    if (!getDfsxConfig().enabled) {
+      job.dfsx = { status: 'nonaktif' };
+      return;
+    }
+
+    job.dfsx = { status: 'menyimpan' };
+    const namaBerkas = job.outputFilename || path.basename(filePath);
+    const hasil = await arsipkanKeDfsx({
+      localId: job.id,
+      sumber: 'download',
+      filePath,
+      namaBerkas,
+    });
+
+    if (hasil.berhasil && hasil.catatan) {
+      job.dfsx = {
+        status: 'tersimpan',
+        fileId: hasil.catatan.fileId,
+        nama: hasil.catatan.nama,
+        versi: hasil.catatan.versi,
+        jumlahChunk: hasil.catatan.jumlahChunk,
+        chunkDideduplikasi: hasil.catatan.chunkDideduplikasi,
+        hashBerkas: hasil.catatan.hashBerkas,
+      };
+      if (getDfsxConfig().pruneLocal) {
+        job.fileExists = fs.existsSync(filePath);
+      }
+    } else {
+      job.dfsx = { status: 'gagal', errorMessage: hasil.galat };
     }
   }
 
@@ -566,6 +603,9 @@ class JobManager {
           }
           // Pastikan preview sementara dihapus setelah proses unduh selesai
           deletePreviewMedia(job.url);
+
+          // Folder unduhan lokal hanya area kerja sementara.
+          await this.simpanHasilKeDfsx(job, finalFile);
         } else {
           job.status = 'failed';
           job.errorMessage = 'Proses selesai tetapi file keluaran tidak ditemukan di direktori unduhan.';

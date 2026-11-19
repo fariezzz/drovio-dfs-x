@@ -1,0 +1,256 @@
+# DFS-X Drovio: 1 master node dan 3 data node sesuai ketentuan Tema 5.
+#
+# Konfigurasi dibaca dari config/.env (lihat config/.env.example). Semua
+# nilai yang bisa berubah ada di berkas itu, bukan di dalam kode.
+#
+# Data node 4 sampai 16 disediakan lewat profil skalabilitas, sehingga
+# pengujian 2, 4, 8, dan 16 node tidak memerlukan berkas compose terpisah:
+#   docker compose --profile n8 up -d
+#
+# Pengujian 2 node dijalankan dengan menghentikan datanode-3:
+#   docker compose stop datanode-3
+
+x-datanode: &datanode
+  build:
+    context: .
+    dockerfile: datanode/Dockerfile
+  restart: unless-stopped
+  environment: &datanode-env
+    MASTER_URL: http://master:9100
+    NODE_PORT: 9101
+    DATA_DIR: /data/chunks
+    HEARTBEAT_INTERVAL_SECONDS: ${HEARTBEAT_INTERVAL_SECONDS:-5}
+    NODE_CAPACITY_MB: ${NODE_CAPACITY_MB:-8192}
+  depends_on:
+    - master
+  networks:
+    - dfsx
+
+services:
+  master:
+    build:
+      context: .
+      dockerfile: master/Dockerfile
+    container_name: dfsx-master
+    restart: unless-stopped
+    environment:
+      MASTER_PORT: 9100
+      METADATA_DB: /data/metadata.db
+      CHUNK_SIZE_MB: ${CHUNK_SIZE_MB:-4}
+      REPLICATION_FACTOR: ${REPLICATION_FACTOR:-2}
+      MIN_REPLICAS: ${MIN_REPLICAS:-2}
+      HEARTBEAT_INTERVAL_SECONDS: ${HEARTBEAT_INTERVAL_SECONDS:-5}
+      NODE_DEAD_THRESHOLD_SECONDS: ${NODE_DEAD_THRESHOLD_SECONDS:-15}
+      HEAL_INTERVAL_SECONDS: ${HEAL_INTERVAL_SECONDS:-5}
+      ADAPTIVE_REPLICATION: ${ADAPTIVE_REPLICATION:-1}
+      CAPACITY_WARN_RATIO: ${CAPACITY_WARN_RATIO:-0.85}
+      MASTER_IO_WORKERS: ${MASTER_IO_WORKERS:-8}
+      CHUNK_READ_TIMEOUT_SECONDS: ${CHUNK_READ_TIMEOUT_SECONDS:-10}
+    ports:
+      - "127.0.0.1:${MASTER_PUBLIC_PORT:-9100}:9100"
+    volumes:
+      - master-meta:/data
+    networks:
+      - dfsx
+
+  datanode-1:
+    <<: *datanode
+    container_name: dfsx-datanode-1
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-1
+      ADVERTISE_URL: http://datanode-1:9101
+    ports:
+      - "127.0.0.1:9101:9101"
+    volumes:
+      - dn1:/data/chunks
+
+  datanode-2:
+    <<: *datanode
+    container_name: dfsx-datanode-2
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-2
+      ADVERTISE_URL: http://datanode-2:9101
+    ports:
+      - "127.0.0.1:9102:9101"
+    volumes:
+      - dn2:/data/chunks
+
+  datanode-3:
+    <<: *datanode
+    container_name: dfsx-datanode-3
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-3
+      ADVERTISE_URL: http://datanode-3:9101
+    ports:
+      - "127.0.0.1:9103:9101"
+    volumes:
+      - dn3:/data/chunks
+
+  datanode-4:
+    <<: *datanode
+    container_name: dfsx-datanode-4
+    profiles: ["n4", "n8", "n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-4
+      ADVERTISE_URL: http://datanode-4:9101
+    volumes:
+      - dn4:/data/chunks
+
+  datanode-5:
+    <<: *datanode
+    container_name: dfsx-datanode-5
+    profiles: ["n8", "n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-5
+      ADVERTISE_URL: http://datanode-5:9101
+    volumes:
+      - dn5:/data/chunks
+
+  datanode-6:
+    <<: *datanode
+    container_name: dfsx-datanode-6
+    profiles: ["n8", "n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-6
+      ADVERTISE_URL: http://datanode-6:9101
+    volumes:
+      - dn6:/data/chunks
+
+  datanode-7:
+    <<: *datanode
+    container_name: dfsx-datanode-7
+    profiles: ["n8", "n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-7
+      ADVERTISE_URL: http://datanode-7:9101
+    volumes:
+      - dn7:/data/chunks
+
+  datanode-8:
+    <<: *datanode
+    container_name: dfsx-datanode-8
+    profiles: ["n8", "n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-8
+      ADVERTISE_URL: http://datanode-8:9101
+    volumes:
+      - dn8:/data/chunks
+
+  datanode-9:
+    <<: *datanode
+    container_name: dfsx-datanode-9
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-9
+      ADVERTISE_URL: http://datanode-9:9101
+    volumes:
+      - dn9:/data/chunks
+
+  datanode-10:
+    <<: *datanode
+    container_name: dfsx-datanode-10
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-10
+      ADVERTISE_URL: http://datanode-10:9101
+    volumes:
+      - dn10:/data/chunks
+
+  datanode-11:
+    <<: *datanode
+    container_name: dfsx-datanode-11
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-11
+      ADVERTISE_URL: http://datanode-11:9101
+    volumes:
+      - dn11:/data/chunks
+
+  datanode-12:
+    <<: *datanode
+    container_name: dfsx-datanode-12
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-12
+      ADVERTISE_URL: http://datanode-12:9101
+    volumes:
+      - dn12:/data/chunks
+
+  datanode-13:
+    <<: *datanode
+    container_name: dfsx-datanode-13
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-13
+      ADVERTISE_URL: http://datanode-13:9101
+    volumes:
+      - dn13:/data/chunks
+
+  datanode-14:
+    <<: *datanode
+    container_name: dfsx-datanode-14
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-14
+      ADVERTISE_URL: http://datanode-14:9101
+    volumes:
+      - dn14:/data/chunks
+
+  datanode-15:
+    <<: *datanode
+    container_name: dfsx-datanode-15
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-15
+      ADVERTISE_URL: http://datanode-15:9101
+    volumes:
+      - dn15:/data/chunks
+
+  datanode-16:
+    <<: *datanode
+    container_name: dfsx-datanode-16
+    profiles: ["n16"]
+    environment:
+      <<: *datanode-env
+      NODE_ID: datanode-16
+      ADVERTISE_URL: http://datanode-16:9101
+    volumes:
+      - dn16:/data/chunks
+
+networks:
+  dfsx:
+    driver: bridge
+
+volumes:
+  master-meta:
+  dn1:
+  dn2:
+  dn3:
+  dn4:
+  dn5:
+  dn6:
+  dn7:
+  dn8:
+  dn9:
+  dn10:
+  dn11:
+  dn12:
+  dn13:
+  dn14:
+  dn15:
+  dn16:

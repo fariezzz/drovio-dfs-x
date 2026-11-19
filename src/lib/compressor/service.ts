@@ -12,6 +12,7 @@ import {
   CompressionOptions,
   CompressionResult,
 } from './types';
+import { arsipkanKeDfsx } from '../dfsx/archive';
 
 // Singleton di globalThis agar state bertahan antar request dan antar bundle Next.js
 declare global {
@@ -236,6 +237,16 @@ export async function executeCompression(
 
   const map = getCompressedMap();
   map.set(id, result);
+
+  // Integrasi DFS-X. Kegagalannya tidak menggagalkan kompresi.
+  await arsipkanKeDfsx({
+    localId: id,
+    sumber: 'compress',
+    filePath: finalPath,
+    namaBerkas: userFacingName,
+    mimeType: finalMimeType,
+  });
+
   return result;
 }
 

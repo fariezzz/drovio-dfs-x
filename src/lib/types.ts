@@ -107,6 +107,19 @@ export interface Job {
   createdAt: number;
   completedAt?: number;
   fileExists?: boolean;
+  // Status penyimpanan hasil ke DFS-X.
+  dfsx?: DfsxJobInfo;
+}
+
+export interface DfsxJobInfo {
+  status: 'menyimpan' | 'tersimpan' | 'gagal' | 'nonaktif';
+  fileId?: string;
+  nama?: string;
+  versi?: number;
+  jumlahChunk?: number;
+  chunkDideduplikasi?: number;
+  hashBerkas?: string;
+  errorMessage?: string;
 }
 
 export interface SystemHealth {

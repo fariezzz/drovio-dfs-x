@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Download, HardDrive, Menu, X, Zap, Sun, Moon, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { Download, HardDrive, Menu, X, Zap, Sun, Moon, RefreshCw, Network } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'downloader' | 'compressor' | 'converter';
@@ -122,6 +123,15 @@ export default function Navbar({
             <HardDrive className="h-3.5 w-3.5 text-obsidian-muted" />
             <span>Riwayat</span>
           </button>
+
+          {/* Diagnostik DFS-X dipisah dari alur utama pengguna */}
+          <Link
+            href="/dfsx"
+            className="flex h-9 items-center gap-1.5 rounded-md border border-obsidian-border bg-obsidian-surface px-3.5 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-border-strong hover:bg-obsidian-elevated hover:text-white"
+          >
+            <Network className="h-3.5 w-3.5 text-obsidian-muted" />
+            <span>Monitor DFS-X</span>
+          </Link>
         </div>
 
         {/* Mobile Actions: Theme Toggle */}
@@ -143,7 +153,7 @@ export default function Navbar({
       </div>
 
       {/* Mobile Tab Navigation Bar: Menggantikan hamburger menu dengan akses langsung yang intuitif */}
-      <div className="grid grid-cols-4 md:hidden border-t border-obsidian-border/60 bg-obsidian-surface/90 px-1 py-1 text-center">
+      <div className="grid grid-cols-5 md:hidden border-t border-obsidian-border/60 bg-obsidian-surface/90 px-1 py-1 text-center">
         <button
           type="button"
           onClick={() => onSelectTab('downloader')}
@@ -191,6 +201,14 @@ export default function Navbar({
           <HardDrive className="h-3.5 w-3.5" />
           <span>Riwayat</span>
         </button>
+
+        <Link
+          href="/dfsx"
+          className="flex flex-col items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-medium text-obsidian-muted hover:text-white transition-all"
+        >
+          <Network className="h-3.5 w-3.5" />
+          <span>DFS-X</span>
+        </Link>
       </div>
     </header>
   );
